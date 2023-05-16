@@ -1,3 +1,3 @@
-#define MR 8
-#define NR 12
-#define KR 4
+//#define MR 4
+//#define NR 4
+//#define KR 1

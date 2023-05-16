@@ -12,6 +12,7 @@
 
 #include <arm_neon.h>
 #include "gemm_blis_neon_fp32.h"
+#include "uk.h"
 #include "blis_neon.h"
 #include <sys/time.h>
 
@@ -97,20 +98,22 @@ int main(int argc, char * argv []){
 	int i;
 	double t1, t2, time, tmin, flops, GFLOPS;
         
-	cntx_t * cntx;
-        auxinfo_t * aux;
+	const cntx_t * cntx;
+        auxinfo_t  aux;
 #if defined(FP32)
-        sgemm_ukr_ft gemm_kernel;
+        gemm_ukr_ft gemm_kernel;
 #else	
         dgemm_ukr_ft gemm_kernel;
 #endif
 	variant= argv[1];
-        
-	kmin  = atoi(argv[2]);
-	kmax  = atoi(argv[3]);
-	kstep = atoi(argv[4]);
-	tmin   = atof(argv[5]);
-	test   = argv[6][0];
+        int MR = atoi(argv[2]);
+        int NR = atoi(argv[3]);	
+	int KR=1;
+	kmin  = atoi(argv[4]);
+	kmax  = atoi(argv[5]);
+	kstep = atoi(argv[6]);
+	tmin   = atof(argv[7]);
+	test   = argv[8][0];
 
  printf("# ============================================================================================");
    if ( test=='T' ) printf("======="); printf("\n");
@@ -122,7 +125,7 @@ int main(int argc, char * argv []){
 	         printf("# --------------------------------------------------------------------------------------------");
 		   if ( test=='T' ) printf("-------"); printf("\n");
 
-        if (strcmp(variant,"QBLIS\0") == 0){
+        if (strcmp(variant,"QBLIS") == 0){
            /*mmin  = atoi(argv[7]);
 	   mmax  = atoi(argv[8]);
 	   mstep = atoi(argv[9]);
@@ -137,17 +140,25 @@ int main(int argc, char * argv []){
 	   mstep = nstep = 1;
 	   resident = 'C';
 	}
-        if (strcmp(variant,"BLIS\0") == 0)
+        if (strcmp(variant,"EXO") == 0)
+	{
+	   mmin = mmax = MR;
+	   nmin = nmax=  NR;
+	   mstep = nstep = 1;
+	   resident = 'C';
+
+	}
+        if (strcmp(variant,"BLIS") == 0)
 	{
 	
 	    bli_init();
 	    cntx = bli_gks_query_cntx();
             //We get the pointer to the GEMM using FLOATS
-	    
-	    gemm_kernel = bli_cntx_get_l3_nat_ukr_dt(BTYPE, /*BLIS_GEMM_UKR*/0, cntx);
+	     auxinfo_t aux; 
+	    gemm_kernel = bli_cntx_get_l3_vir_ukr_dt(BTYPE, BLIS_GEMM_UKR, cntx);
 
-            M = bli_cntx_get_blksz_def_dt(BTYPE, BLIS_MR, cntx);
-	    N = bli_cntx_get_blksz_def_dt(BTYPE, BLIS_NR, cntx);
+            M = MR;//bli_cntx_get_blksz_def_dt(BTYPE, BLIS_MR, cntx);
+	    N = NR; //bli_cntx_get_blksz_def_dt(BTYPE, BLIS_NR, cntx);
             mmin=mmax=M; mstep=1;
             nmin=nmax=N; nstep=1;
 	    resident = 'C';
@@ -158,7 +169,7 @@ int main(int argc, char * argv []){
 	    PACKMC = bli_cntx_get_blksz_max_dt(BTYPE, BLIS_MC, cntx);
 	    PACKNC = bli_cntx_get_blksz_max_dt(BTYPE, BLIS_NC, cntx);
 
-	    row_pref = bli_cntx_get_l3_nat_ukr_prefs_dt(BTYPE, BLIS_GEMM_UKR, cntx);
+	    //row_pref = bli_cntx_get_l3_nat_ukr_prefs_dt(BTYPE, BLIS_GEMM_UKR, cntx);
 	}
 	A = (DTYPE *) malloc(sizeof(DTYPE)*mmax*kmax);
 	A2 = (DTYPE *) malloc(sizeof(DTYPE)*mmax*kmax);
@@ -172,10 +183,10 @@ int main(int argc, char * argv []){
 	for(int m=mmin;m<=mmax;m+=mstep){
 	for(int n=nmin;n<=nmax;n+=nstep){
 	for(int k=kmin;k<=kmax;k+=kstep){
-        if (strcmp(variant,"BLIS\0") == 0)
+        if (strcmp(variant,"BLIS") == 0)
 	{
 	  
-	    K=(k<=PACKKC)? k : PACKKC;
+	    K=k; //(k<=PACKKC)? k : PACKKC;
 	    M=m;
 	    N=n;
 	    time  = 0.0;
@@ -186,10 +197,13 @@ int main(int argc, char * argv []){
 	    while ( time <= tmin ) {
 	       nreps+=100;
 	       //gemm_kernel(K, &alpha, (one)?A:A2, B, &beta, C, 1, M, aux, cntx);
-	       for(int i=0;i<100;i++)
-	       gemm_kernel(K, &alpha, A, B, &beta, C, 1, M, aux, cntx);
-	       t2   = dclock();
+	       for(int i=0;i<100;i++){
+	       //gemm_kernel(K, &alpha, A, B, &beta, C, 1, M, &aux, cntx);
+	       gemm_kernel(M,N,K, &alpha, A, B, &beta, C, 1, M, &aux, cntx);
 	       //one=!one;
+	       //gemm_kernel(K, &alpha, (one)?A:A2, B, &beta, C, 1, M, &aux, cntx);
+	       }
+	       t2   = dclock();
 	       time = ( t2 > t1 ? t2 - t1 : 0.0 );
 	    }
 	    time = time/nreps;
@@ -203,7 +217,7 @@ int main(int argc, char * argv []){
            flops   = 2.0 * m * n * k;
 	   GFLOPS  = flops / (1.0e+9 * time );
            printf("        %5s  %c  %5d %5d %5d %6d %6d %6d %5d %5d %5d %8.2e %8.2e %9.2e",
-		             variant, resident, m, n, k, PACKMR, PACKNR, PACKKR, PACKMC, PACKNC, PACKKC, time, GFLOPS, -1.0 );
+		             variant, resident, m, n, k, PACKMR, PACKNR, PACKKR, PACKMC, PACKNC, /*PACKKC*/K, time, GFLOPS, -1.0 );
 	     if ( test=='T' ) {
 		   if ( !gemm_error )
 		      printf("   [OK]");         
@@ -214,12 +228,14 @@ int main(int argc, char * argv []){
 
 
 	} //BLIS
-	else if(strcmp(variant,"QBLIS\0") == 0){
-	    time  = 0.0;
+	else if(strcmp(variant,"QBLIS") == 0){
+	    	time  = 0.0;
 	    t1    = dclock();
 	    nreps = 0;
 	    double taux;
 	    int one=0;
+	    M = m; N = n; K = k;
+	      //printf("C, %d, %d, %d, %f, %p, %p, %f, %p, %d\n", M, N, K, alpha, A, B, beta, C, M);fflush(stdout);
 	    while ( time <= tmin ) {
 	       nreps+=100;
 	      int ldC = M;
@@ -232,6 +248,7 @@ int main(int argc, char * argv []){
 	      one=!one;
 	       time = ( t2 > t1 ? t2 - t1 : 0.0 );
 	    }
+	    printf("antest\n");
 	    time = time/nreps;
 	    if (test == 'T'){
 	    Cr = (DTYPE *) malloc(sizeof(DTYPE)*M*N);
@@ -252,6 +269,54 @@ int main(int argc, char * argv []){
 	     }
 	     printf("\n");
 	}
+	else if(strcmp(variant,"EXO") == 0){
+	    time  = 0.0;
+	    t1    = dclock();
+	    nreps = 0;
+	    double taux;
+	    int one=0;
+	    while ( time <= tmin ) {
+	       nreps+=100;
+	      int ldC = M;
+	      M = m; N = n; K = k;
+	      
+	      for(int i=0;i<100;i++)
+	      uk_8x12_a1True_b1True( NULL, K, &alpha, A, B, &beta, C);
+	      
+	       t2   = dclock();
+	      one=!one;
+	       time = ( t2 > t1 ? t2 - t1 : 0.0 );
+	    }
+	    time = time/nreps;
+	    if (test == 'T'){
+	    Cr = (DTYPE *) malloc(sizeof(DTYPE)*M*N);
+	    for(i=0;i<M*N;i++){ Cr[i] = 0.0f;C[i]=0.0f;
+	    }
+	      //uk_8x12( NULL, K, C,A,B);
+              //example_sgemm_a1True_b1False(NULL, K, &alpha, A, B, &beta, C);
+	      uk_8x4_a1True_b1False( NULL, K, &alpha, A, B, &beta, C);
+              //uk_8x12( NULL, K, (struct exo_win_2f32){C,{M,1}}, (struct exo_win_2f32c){A,{1,M}}, (struct exo_win_2f32c){B,{1,N}});
+
+	     gemm_base(M,N,K, A, M, B, N, Cr, M);
+	     for(int ii = 0; ii< M; ii++)
+	     for(int jj = 0; jj< N; jj++)
+		     printf("Cr=%f -- C=%f\n",Cr[jj*M+ii],C[jj*M+ii]);
+
+	     gemm_error = check_error(C,Cr,M*N);
+	     }
+            flops   = 2.0 * m * n * k;
+	    GFLOPS  = flops / (1.0e+9 * time );
+            printf("        %5s  %c  %5d %5d %5d %6d %6d %6d %8.2e %8.2e %9.2e",
+		             variant, resident, m, n, k, MR, NR, KR, time, GFLOPS, -1.0 );
+	     if ( test=='T' ) {
+		   if ( !gemm_error )
+		      printf("   [OK]");         
+		   else
+    		       printf("*******");
+	     }
+	     printf("\n");
+	}
+	
 	
 	} //k
 	} //n
