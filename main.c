@@ -97,7 +97,9 @@ int main(int argc, char * argv []){
 	char resident;
 	int i;
 	double t1, t2, time, tmin, flops, GFLOPS;
-        
+       
+	FILE *fd_csv;	
+
 	const cntx_t * cntx;
         auxinfo_t  aux;
 #if defined(FP32)
@@ -114,6 +116,12 @@ int main(int argc, char * argv []){
 	kstep = atoi(argv[6]);
 	tmin   = atof(argv[7]);
 	test   = argv[8][0];
+        
+       	char name_file [30];
+	sprintf(name_file,"output/%s_%d_%d.dat",argv[1],MR,NR);
+	fd_csv = fopen(name_file, "w");
+	fprintf(fd_csv, "#%s %d %d %s\n",argv[1],MR,NR, "GFLOPS");
+
 
  printf("# ============================================================================================");
    if ( test=='T' ) printf("======="); printf("\n");
@@ -280,7 +288,7 @@ int main(int argc, char * argv []){
 	      M = m; N = n; K = k;
 	      
 	      for(int i=0;i<100;i++)
-	      uk_4x4_a1True_b1True( NULL, K, &alpha, A, B, &beta,  (struct exo_win_2f32){C,{M,1}});
+	      uk_8x12_a1True_b1True( NULL, K, &alpha, A, B, &beta,  (struct exo_win_2f32){C,{M,1}});
 	      
 	       t2   = dclock();
 	      one=!one;
@@ -293,7 +301,7 @@ int main(int argc, char * argv []){
 	    }
 	      //uk_8x12( NULL, K, C,A,B);
               //example_sgemm_a1True_b1False(NULL, K, &alpha, A, B, &beta, C);
-	      uk_4x4_a1True_b1True( NULL, K, &alpha, A, B, &beta,  (struct exo_win_2f32){C,{M,1}});
+	      uk_8x12_a1True_b1True( NULL, K, &alpha, A, B, &beta,  (struct exo_win_2f32){C,{M,1}});
               //uk_8x12( NULL, K, (struct exo_win_2f32){C,{M,1}}, (struct exo_win_2f32c){A,{1,M}}, (struct exo_win_2f32c){B,{1,N}});
 
 	     gemm_base(M,N,K, A, M, B, N, Cr, M);
@@ -316,7 +324,8 @@ int main(int argc, char * argv []){
 	} //k
 	} //n
 	} //m
-	
+        fprintf(fd_csv, "%f\n", GFLOPS);
+         fclose(fd_csv);	
        printf("# End of program...\n");
          printf("# ============================================================================================");
 	   if ( test=='T' ) printf("=======");   printf("\n");
