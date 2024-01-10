@@ -1,24 +1,18 @@
 
-
-BLISFLAGS := -I/home/adcastel/opt/blis/include/blis/ -L/home/adcastel/opt/blis/lib -lblis -lm 
+##BLISHOME=$(HOME)/EXO_artifact/opt/blis
+BLISFLAGS := -I${BLISHOME}/include/blis/ -L/${BLISHOME}/lib/ -lblis -lm
 OMPFLAGS := 
-CC := gcc-10 #-mcpu=cortex-a57
-#CC := clang #-mcpu=cortex-a57
-CFLAGS := -O3 -mcpu=cortex-a57  
-#CFLAGS := -O3 -mtune=cortex-a57 -march=armv8.2a+fp+simd -mfpu=neon -mcpu=cortex-a57
+CC := gcc
+CFLAGS := -O3 -march=armv8.2-a+simd+fp+fp16fml 
+CFLAGS += -DFP32
 
-OBJECTS := 
+OBJECTS := gemm_blis_neon_fp32.o uk_exo.o 
 
 
 all: driver 
-ifeq ($(DOUBLE), 1)
-    CFLAGS += -DFP64
-else
-    CFLAGS += -DFP32
-endif
 
-driver: gemm_blis_neon_fp32.o uk.o
-	$(CC) $(CFLAGS) main.c -o test_uk_blis gemm_blis_neon_fp32.o uk.o $(BLISFLAGS) $(OMPFLAGS) 
+driver: $(OBJECTS)
+	$(CC) $(CFLAGS) main.c -o test_uk_blis $(OBJECTS) -DMMR=${MMR} -DNNR=${NNR} $(BLISFLAGS) $(OMPFLAGS) 
 
 
 .c.o:

@@ -12,7 +12,7 @@
 
 #include <arm_neon.h>
 #include "gemm_blis_neon_fp32.h"
-#include "uk.h"
+#include "uk_exo.h"
 #include "blis_neon.h"
 #include <sys/time.h>
 
@@ -62,7 +62,7 @@ int check_error(DTYPE * C, DTYPE * Cr, int size){
     double nrm   = 0.0;
     double tmp;
     for(int i = 0; i < size; i++){
-	 // printf("%f  -- %f\n",Cr[i], C[i]);
+	  //printf("%f  -- %f\n",Cr[i], C[i]);
           tmp = (double) Cr[i]*Cr[i];
 	  nrm += tmp*tmp;
 	  tmp = (double) fabs(Cr[i]-C[i]);
@@ -125,7 +125,7 @@ int main(int argc, char * argv []){
 	         printf("# --------------------------------------------------------------------------------------------");
 		   if ( test=='T' ) printf("-------"); printf("\n");
 
-        if (strcmp(variant,"QBLIS") == 0){
+        if (strcmp(variant,"NEON") == 0){
            /*mmin  = atoi(argv[7]);
 	   mmax  = atoi(argv[8]);
 	   mstep = atoi(argv[9]);
@@ -228,7 +228,7 @@ int main(int argc, char * argv []){
 
 
 	} //BLIS
-	else if(strcmp(variant,"QBLIS") == 0){
+	else if(strcmp(variant,"NEON") == 0){
 	    	time  = 0.0;
 	    t1    = dclock();
 	    nreps = 0;
@@ -248,7 +248,6 @@ int main(int argc, char * argv []){
 	      one=!one;
 	       time = ( t2 > t1 ? t2 - t1 : 0.0 );
 	    }
-	    printf("antest\n");
 	    time = time/nreps;
 	    if (test == 'T'){
 	    Cr = (DTYPE *) malloc(sizeof(DTYPE)*M*N);
@@ -281,7 +280,7 @@ int main(int argc, char * argv []){
 	      M = m; N = n; K = k;
 	      
 	      for(int i=0;i<100;i++)
-	      uk_8x12_a1True_b1True( NULL, K, &alpha, A, B, &beta, C);
+	      uk_4x4_a1True_b1True( NULL, K, &alpha, A, B, &beta,  (struct exo_win_2f32){C,{M,1}});
 	      
 	       t2   = dclock();
 	      one=!one;
@@ -294,14 +293,10 @@ int main(int argc, char * argv []){
 	    }
 	      //uk_8x12( NULL, K, C,A,B);
               //example_sgemm_a1True_b1False(NULL, K, &alpha, A, B, &beta, C);
-	      uk_8x4_a1True_b1False( NULL, K, &alpha, A, B, &beta, C);
+	      uk_4x4_a1True_b1True( NULL, K, &alpha, A, B, &beta,  (struct exo_win_2f32){C,{M,1}});
               //uk_8x12( NULL, K, (struct exo_win_2f32){C,{M,1}}, (struct exo_win_2f32c){A,{1,M}}, (struct exo_win_2f32c){B,{1,N}});
 
 	     gemm_base(M,N,K, A, M, B, N, Cr, M);
-	     for(int ii = 0; ii< M; ii++)
-	     for(int jj = 0; jj< N; jj++)
-		     printf("Cr=%f -- C=%f\n",Cr[jj*M+ii],C[jj*M+ii]);
-
 	     gemm_error = check_error(C,Cr,M*N);
 	     }
             flops   = 2.0 * m * n * k;
