@@ -1,2 +1,6 @@
 .o
 .s
+uk.c
+uk.h
+output
+test_uk_blis
